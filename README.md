@@ -5,10 +5,11 @@
 ## Что реализовано
 - Welcome/Landing экран с входом и формой «Новый сотрудник».
 - Локальная авторизация через Room (`admin/admin123`, `designer/des123`, `operator/op123`, `manager/man123`).
-- Главный экран с Bottom Navigation: Профиль / AI / Инструменты.
+- Главный экран с Bottom Navigation: Профиль / AI / Инструменты / Messenger.
 - Профиль с футуристичным стилем, диалогом настроек (DataStore), birthday banner.
 - AI-заглушка чата + локальное сохранение API key.
 - Инструменты и динамический список инструментов.
+- Локальный Bluetooth Messenger (RFCOMM): список устройств, подключение, чат, хранение сообщений в Room.
 - Архитектура подготовлена для будущего backend слоя (repository/viewmodel/data separation).
 
 ## Запуск

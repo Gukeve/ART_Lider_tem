@@ -9,9 +9,10 @@ import com.artleader.mvp.ui.screens.auth.WelcomeScreen
 import com.artleader.mvp.ui.screens.main.MainShell
 import com.artleader.mvp.ui.screens.newemployee.NewEmployeeScreen
 import com.artleader.mvp.viewmodel.MainViewModel
+import com.artleader.mvp.viewmodel.MessengerViewModel
 
 @Composable
-fun AppNavGraph(navController: NavHostController, vm: MainViewModel) {
+fun AppNavGraph(navController: NavHostController, vm: MainViewModel, messengerViewModel: MessengerViewModel) {
     NavHost(navController = navController, startDestination = "welcome") {
         composable("welcome") { WelcomeScreen(
             onLogin = { navController.navigate("login") },
@@ -19,6 +20,6 @@ fun AppNavGraph(navController: NavHostController, vm: MainViewModel) {
         ) }
         composable("login") { LoginScreen(vm = vm, onSuccess = { navController.navigate("main") }) }
         composable("new") { NewEmployeeScreen() }
-        composable("main") { MainShell(vm) }
+        composable("main") { MainShell(vm, messengerViewModel) }
     }
 }
