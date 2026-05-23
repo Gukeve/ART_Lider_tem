@@ -9,7 +9,9 @@ data class MessageEntity(
     val chatId: String,
     val senderId: String,
     val senderName: String,
+    val targetId: String? = null,
     val encryptedPayload: String,
+    val ttl: Int = 6,
     val deliveryState: String,
     val timestamp: Long,
     val isMine: Boolean
