@@ -13,6 +13,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.rememberNavController
 import com.artleader.mvp.bluetooth.BluetoothManager
 import com.artleader.mvp.data.local.db.AppDatabase
+import com.artleader.mvp.data.preferences.SessionStore
 import com.artleader.mvp.data.preferences.SettingsStore
 import com.artleader.mvp.data.repository.AuthRepository
 import com.artleader.mvp.data.repository.BluetoothRepository
@@ -27,10 +28,11 @@ class MainActivity : ComponentActivity() {
         val db = AppDatabase.build(this)
         val settings = SettingsStore(this)
         val authRepository = AuthRepository(db.userDao())
-        val btRepo = BluetoothRepository(BluetoothManager(BluetoothAdapter.getDefaultAdapter()), db.messageDao())
+        val sessionStore = SessionStore(this)
+        val btRepo = BluetoothRepository(BluetoothManager(BluetoothAdapter.getDefaultAdapter()), db.messageDao(), db.chatDao(), db.messengerUserDao())
 
         setContent {
-            val vm: MainViewModel = viewModel(factory = factory { MainViewModel(authRepository, settings) })
+            val vm: MainViewModel = viewModel(factory = factory { MainViewModel(authRepository, settings, sessionStore) })
             val messengerVm: MessengerViewModel = viewModel(factory = factory { MessengerViewModel(btRepo) })
             ArtLeaderApp(vm, messengerVm)
         }

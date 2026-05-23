@@ -4,7 +4,9 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.artleader.mvp.data.local.entity.ChatEntity
 import com.artleader.mvp.data.local.entity.MessageEntity
+import com.artleader.mvp.data.local.entity.MessengerUserEntity
 import com.artleader.mvp.data.repository.BluetoothRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,8 +19,7 @@ import kotlinx.coroutines.launch
 data class MessengerUiState(
     val bluetoothEnabled: Boolean = false,
     val connectionState: String = "Bluetooth выключен",
-    val devices: List<BluetoothDevice> = emptyList(),
-    val selectedDeviceName: String? = null,
+    val selectedChatId: String? = null,
     val error: String? = null
 )
 
@@ -26,60 +27,66 @@ class MessengerViewModel(private val repository: BluetoothRepository) : ViewMode
     private val _ui = MutableStateFlow(MessengerUiState(bluetoothEnabled = repository.isEnabled()))
     val ui: StateFlow<MessengerUiState> = _ui.asStateFlow()
 
-    private val selectedDevice = MutableStateFlow<String?>(null)
-    val messages: StateFlow<List<MessageEntity>> = selectedDevice.flatMapLatest { name ->
-        repository.messages(name ?: "")
+    val chats = repository.observeChats().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val users = repository.observeUsers().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val nearbyDevices = MutableStateFlow<List<BluetoothDevice>>(emptyList())
+
+    val messages: StateFlow<List<MessageEntity>> = ui.flatMapLatest { state ->
+        repository.messages(state.selectedChatId ?: "")
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var socket: BluetoothSocket? = null
 
+    init { viewModelScope.launch { repository.seedUsers() } }
+
     fun refreshDevices() {
-        _ui.value = _ui.value.copy(
-            bluetoothEnabled = repository.isEnabled(),
-            devices = repository.bondedDevices(),
-            connectionState = if (repository.isEnabled()) "Поиск устройств" else "Bluetooth выключен"
-        )
+        _ui.value = _ui.value.copy(bluetoothEnabled = repository.isEnabled(), connectionState = if (repository.isEnabled()) "Поиск устройств" else "Bluetooth выключен")
+        nearbyDevices.value = repository.bondedDevices()
     }
 
-    fun waitForIncoming() = viewModelScope.launch {
-        runCatching {
-            _ui.value = _ui.value.copy(connectionState = "Ожидание подключения")
-            socket = repository.accept()
-            val name = socket?.remoteDevice?.name ?: "Unknown"
-            selectedDevice.value = name
-            _ui.value = _ui.value.copy(connectionState = "Подключено", selectedDeviceName = name)
-            startListening()
-        }.onFailure { _ui.value = _ui.value.copy(error = "Ошибка подключения: ${it.message}") }
+    fun openPrivateChat(user: MessengerUserEntity) = viewModelScope.launch {
+        val chatId = repository.createPrivateChat(user)
+        _ui.value = _ui.value.copy(selectedChatId = chatId)
     }
 
-    fun connect(device: BluetoothDevice) = viewModelScope.launch {
+    fun createGroup(name: String, members: List<MessengerUserEntity>) = viewModelScope.launch {
+        val chatId = repository.createGroupChat(name, members.map { it.userId })
+        _ui.value = _ui.value.copy(selectedChatId = chatId)
+    }
+
+    fun selectChat(chat: ChatEntity) { _ui.value = _ui.value.copy(selectedChatId = chat.chatId) }
+
+    fun connectAsClient(device: BluetoothDevice) = viewModelScope.launch {
         runCatching {
-            _ui.value = _ui.value.copy(connectionState = "Подключение к ${device.name}")
             socket = repository.connect(device)
-            selectedDevice.value = device.name ?: "Unknown"
-            _ui.value = _ui.value.copy(connectionState = "Подключено", selectedDeviceName = selectedDevice.value)
-            startListening()
-        }.onFailure { _ui.value = _ui.value.copy(error = "Устройство недоступно: ${it.message}") }
+            _ui.value = _ui.value.copy(connectionState = "Подключено: ${device.name ?: device.address}")
+            startListeningRelay()
+        }.onFailure { _ui.value = _ui.value.copy(error = "Ошибка подключения") }
+    }
+
+    fun hostSession() = viewModelScope.launch {
+        runCatching {
+            _ui.value = _ui.value.copy(connectionState = "Ожидание клиентов (host)")
+            socket = repository.accept()
+            _ui.value = _ui.value.copy(connectionState = "Host connected")
+            startListeningRelay()
+        }.onFailure { _ui.value = _ui.value.copy(error = "Host error") }
     }
 
     fun send(text: String) = viewModelScope.launch {
-        val currentSocket = socket ?: return@launch
-        val device = _ui.value.selectedDeviceName ?: "Unknown"
+        val chatId = _ui.value.selectedChatId ?: return@launch
         runCatching {
-            repository.send(currentSocket, text)
-            repository.saveMessage(device, text, true)
-        }.onFailure { _ui.value = _ui.value.copy(error = "Соединение потеряно") }
+            repository.saveMessage(chatId, text, true)
+            socket?.let { repository.send(it, text) }
+        }.onFailure { _ui.value = _ui.value.copy(error = "send failed") }
     }
 
-    private fun startListening() = viewModelScope.launch {
-        val currentSocket = socket ?: return@launch
-        val device = _ui.value.selectedDeviceName ?: "Unknown"
+    private fun startListeningRelay() = viewModelScope.launch {
+        val current = socket ?: return@launch
         while (true) {
-            val incoming = repository.receive(currentSocket) ?: break
-            repository.saveMessage(device, incoming, false)
+            val incoming = repository.receive(current) ?: break
+            val chatId = _ui.value.selectedChatId ?: continue
+            repository.saveMessage(chatId, incoming, false, "peer", "Peer")
         }
-        _ui.value = _ui.value.copy(connectionState = "Соединение потеряно")
     }
-
-    fun clearError() { _ui.value = _ui.value.copy(error = null) }
 }

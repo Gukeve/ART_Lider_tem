@@ -5,9 +5,12 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "messages")
 data class MessageEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val deviceName: String,
-    val text: String,
-    val isMine: Boolean,
-    val timestamp: Long
+    @PrimaryKey val messageId: String,
+    val chatId: String,
+    val senderId: String,
+    val senderName: String,
+    val encryptedPayload: String,
+    val deliveryState: String,
+    val timestamp: Long,
+    val isMine: Boolean
 )
