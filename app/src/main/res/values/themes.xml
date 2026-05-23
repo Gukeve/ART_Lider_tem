@@ -1,3 +1,5 @@
 <resources>
-    <style name="Theme.ArtLeader" parent="Theme.Material3.Dark.NoActionBar" />
+
+    <style name="Theme.ArtLeader" parent="android:Theme.DeviceDefault.NoActionBar" />
+
 </resources>
