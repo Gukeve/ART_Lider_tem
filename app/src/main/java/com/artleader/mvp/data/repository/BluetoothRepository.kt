@@ -49,14 +49,24 @@ class BluetoothRepository(
         return id
     }
 
-    suspend fun saveMessage(chatId: String, text: String, isMine: Boolean, senderId: String = "me", senderName: String = "Вы") {
+    suspend fun saveMessage(
+        chatId: String,
+        text: String,
+        isMine: Boolean,
+        senderId: String = "me",
+        senderName: String = "Вы",
+        targetId: String? = null,
+        ttl: Int = 6
+    ) {
         messageDao.insert(
             MessageEntity(
                 messageId = UUID.randomUUID().toString(),
                 chatId = chatId,
                 senderId = senderId,
                 senderName = senderName,
+                targetId = targetId,
                 encryptedPayload = text,
+                ttl = ttl,
                 deliveryState = "delivered",
                 timestamp = System.currentTimeMillis(),
                 isMine = isMine
