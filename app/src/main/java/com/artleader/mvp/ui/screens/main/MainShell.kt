@@ -8,9 +8,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.ChatBubbleRounded
-import androidx.compose.material.icons.filled.HomeRounded
-import androidx.compose.material.icons.filled.PersonRounded
+import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -52,10 +52,10 @@ fun MainShell(vm: MainViewModel, messengerViewModel: MessengerViewModel) {
             ) {
                 tabs.forEachIndexed { i, t ->
                     val icon = when (i) {
-                        0 -> Icons.Default.HomeRounded
-                        1 -> Icons.Default.ChatBubbleRounded
+                        0 -> Icons.Default.Home
+                        1 -> Icons.Default.Chat
                         2 -> Icons.Default.AutoAwesome
-                        else -> Icons.Default.PersonRounded
+                        else -> Icons.Default.Person
                     }
                     NavigationBarItem(
                         selected = idx == i,
