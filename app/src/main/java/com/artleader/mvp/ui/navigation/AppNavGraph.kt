@@ -10,11 +10,12 @@ import com.artleader.mvp.ui.screens.auth.LoginScreen
 import com.artleader.mvp.ui.screens.auth.WelcomeScreen
 import com.artleader.mvp.ui.screens.main.MainShell
 import com.artleader.mvp.ui.screens.newemployee.NewEmployeeScreen
+import com.artleader.mvp.viewmodel.AttendanceViewModel
 import com.artleader.mvp.viewmodel.MainViewModel
 import com.artleader.mvp.viewmodel.MessengerViewModel
 
 @Composable
-fun AppNavGraph(navController: NavHostController, vm: MainViewModel, messengerViewModel: MessengerViewModel) {
+fun AppNavGraph(navController: NavHostController, vm: MainViewModel, messengerViewModel: MessengerViewModel, attendanceViewModel: AttendanceViewModel) {
     val session by vm.session.collectAsState()
     val start = if (session.isLoggedIn) "main" else "welcome"
     NavHost(navController = navController, startDestination = start) {
@@ -23,11 +24,11 @@ fun AppNavGraph(navController: NavHostController, vm: MainViewModel, messengerVi
                 onLogin = { navController.navigate("login") },
                 onNewEmployee = { navController.navigate("new") },
                 session = session,
-                onBiometric = { if (session.isLoggedIn) navController.navigate("main") }
+                onBiometric = { vm.unlockWithBiometric(); navController.navigate("main") }
             )
         }
         composable("login") { LoginScreen(vm = vm, onSuccess = { navController.navigate("main") }) }
         composable("new") { NewEmployeeScreen() }
-        composable("main") { MainShell(vm, messengerViewModel) }
+        composable("main") { MainShell(vm, messengerViewModel, attendanceViewModel) }
     }
 }

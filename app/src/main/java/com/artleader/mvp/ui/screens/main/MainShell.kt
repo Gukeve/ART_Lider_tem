@@ -1,32 +1,32 @@
 package com.artleader.mvp.ui.screens.main
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Chat
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Construction
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,173 +38,77 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.artleader.mvp.ui.screens.main.ai.AiScreen
 import com.artleader.mvp.ui.screens.main.messenger.MessengerScreen
 import com.artleader.mvp.ui.screens.main.profile.ProfileScreen
 import com.artleader.mvp.ui.screens.main.tools.ToolsScreen
+import com.artleader.mvp.viewmodel.AttendanceViewModel
 import com.artleader.mvp.viewmodel.MainViewModel
 import com.artleader.mvp.viewmodel.MessengerViewModel
-
-private val Bg         = Color(0xFF07080F)
-private val Neon       = Color(0xFFFFE44D)
-private val BlueTok    = Color(0xFF339CFF)
-private val PinkTok    = Color(0xFFFF3D78)
-private val CyanTok    = Color(0xFF4EF7FF)
-private val TabAccents = listOf(Neon, CyanTok, PinkTok, BlueTok)
 
 private data class NavTab(val icon: ImageVector, val label: String)
 
 @Composable
-fun MainShell(vm: MainViewModel, messengerViewModel: MessengerViewModel) {
-    var idx by remember { mutableIntStateOf(0) }
-
+fun MainShell(vm: MainViewModel, messengerViewModel: MessengerViewModel, attendanceViewModel: AttendanceViewModel) {
+    var idx by remember { mutableIntStateOf(2) }
     val tabs = remember {
         listOf(
-            NavTab(Icons.Default.Home,        "Home"),
-            NavTab(Icons.Default.Chat,        "Chats"),
+            NavTab(Icons.Default.Person, "Profile"),
+            NavTab(Icons.Default.Chat, "Messenger"),
             NavTab(Icons.Default.AutoAwesome, "AI"),
-            NavTab(Icons.Default.Person,      "Profile"),
+            NavTab(Icons.Default.Construction, "Tools"),
+            NavTab(Icons.Default.Code, "Dev")
         )
     }
 
-    Box(Modifier.fillMaxSize().background(Bg)) {
-
-        // Screen area — fade-through cross-screen transition
-        Box(Modifier.fillMaxSize().padding(bottom = 80.dp)) {
-            AnimatedContent(
-                targetState = idx,
-                transitionSpec = {
-                    (fadeIn(tween(220, easing = FastOutSlowInEasing)) +
-                            scaleIn(tween(220, easing = FastOutSlowInEasing), initialScale = 0.97f))
-                        .togetherWith(
-                            fadeOut(tween(110)) +
-                                    scaleOut(tween(110), targetScale = 0.97f)
-                        )
-                },
-                label = "main-tab"
-            ) { selected ->
+    Box(Modifier.fillMaxSize().background(Color(0xFF07080F))) {
+        Box(Modifier.fillMaxSize().padding(bottom = 96.dp)) {
+            AnimatedContent(targetState = idx, transitionSpec = {
+                (fadeIn(tween(220, easing = FastOutSlowInEasing)) + scaleIn(tween(220), initialScale = 0.985f))
+                    .togetherWith(fadeOut(tween(120)) + scaleOut(tween(120), targetScale = 0.985f))
+            }, label = "main-tabs") { selected ->
                 when (selected) {
-                    0    -> ToolsScreen(Modifier.fillMaxSize())
-                    1    -> MessengerScreen(messengerViewModel, Modifier.fillMaxSize())
-                    2    -> AiScreen(vm, Modifier.fillMaxSize())
-                    else -> ProfileScreen(vm, Modifier.fillMaxSize())
+                    0 -> ProfileScreen(vm, Modifier.fillMaxSize())
+                    1 -> MessengerScreen(messengerViewModel, Modifier.fillMaxSize())
+                    2 -> AiScreen(vm, Modifier.fillMaxSize())
+                    3 -> ToolsScreen(attendanceViewModel, Modifier.fillMaxSize())
+                    else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Dev module placeholder", color = Color(0xFF8EA2C8)) }
                 }
             }
         }
-
-        // Floating glass bottom nav
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(horizontal = 20.dp, vertical = 16.dp)
-                .navigationBarsPadding()
-        ) {
-            // Dark glass pill background
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(Color(0xCC0C0E1C))
-            )
-            // Active-tab top-edge glow
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(
-                        Brush.verticalGradient(
-                            0f to TabAccents[idx].copy(0.25f),
-                            0.08f to Color.Transparent
-                        )
-                    )
-            )
-
-            Row(
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                tabs.forEachIndexed { i, tab ->
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        NavItem(
-                            tab        = tab,
-                            selected   = idx == i,
-                            accentColor = TabAccents[i],
-                            onClick    = { idx = i }
-                        )
-                    }
-                }
-            }
-        }
+        BottomNavGlass(tabs = tabs, selected = idx, onSelected = { idx = it })
     }
 }
 
 @Composable
-private fun NavItem(
-    tab: NavTab,
-    selected: Boolean,
-    accentColor: Color,
-    onClick: () -> Unit,
-) {
-    val scale by animateFloatAsState(
-        targetValue      = if (selected) 1.13f else 1f,
-        animationSpec    = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow),
-        label            = "nav-scale"
-    )
-    val iconAlpha by animateFloatAsState(
-        targetValue   = if (selected) 1f else 0.40f,
-        animationSpec = tween(200),
-        label         = "nav-alpha"
-    )
-
-    IconButton(
-        onClick  = onClick,
-        modifier = Modifier.graphicsLayer { scaleX = scale; scaleY = scale }
-    ) {
-        // ColumnScope — both AnimatedVisibility overloads used here are the
-        // generic (non-ColumnScope) ones, which compile in any scope.
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(contentAlignment = Alignment.Center) {
-                // Pill glow behind icon – uses Box scope, generic AnimatedVisibility
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = selected,
-                    enter   = fadeIn(tween(180)) + scaleIn(
-                        spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)
-                    ),
-                    exit    = fadeOut(tween(110)) + scaleOut(tween(110))
-                ) {
-                    Box(
-                        Modifier
-                            .size(width = 48.dp, height = 30.dp)
-                            .clip(RoundedCornerShape(15.dp))
-                            .background(accentColor.copy(alpha = 0.18f))
-                    )
+private fun BottomNavGlass(tabs: List<NavTab>, selected: Int, onSelected: (Int) -> Unit) {
+    val aura by rememberInfiniteTransition(label = "ai-aura").animateFloat(0.2f, 0.6f, infiniteRepeatable(tween(2200), RepeatMode.Reverse), label = "aa")
+    Box(Modifier.navigationBarsPadding().padding(16.dp).fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        Box(Modifier.padding(bottom = 2.dp)) {
+            Box(Modifier.clip(RoundedCornerShape(32.dp)).background(Color(0xCC0C0E1C)).padding(horizontal = 8.dp, vertical = 6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    tabs.forEachIndexed { i, tab ->
+                        if (i == 2) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 2.dp)) {
+                                Box(Modifier.size(66.dp).blur(18.dp).background(Color(0xFF4EF7FF).copy(aura), CircleShape))
+                                IconButton(onClick = { onSelected(i) }, modifier = Modifier.size(56.dp).clip(CircleShape)
+                                    .background(Brush.linearGradient(listOf(Color(0xFF5F42FF), Color(0xFF2C9BFF))))) {
+                                    Icon(tab.icon, tab.label, tint = Color.White)
+                                }
+                            }
+                        } else {
+                            IconButton(onClick = { onSelected(i) }) {
+                                Icon(tab.icon, tab.label, tint = if (selected == i) Color(0xFF4EF7FF) else Color.White.copy(0.5f))
+                            }
+                        }
+                    }
                 }
-                Icon(
-                    imageVector     = tab.icon,
-                    contentDescription = tab.label,
-                    tint            = if (selected) accentColor else Color.White.copy(alpha = iconAlpha),
-                    modifier        = Modifier.size(22.dp)
-                )
-            }
-            // Label – ColumnScope.AnimatedVisibility is correct here (Column child)
-            AnimatedVisibility(
-                visible = selected,
-                enter   = fadeIn(tween(200)) + expandVertically(tween(200)),
-                exit    = fadeOut(tween(120)) + shrinkVertically(tween(120))
-            ) {
-                Text(
-                    text     = tab.label,
-                    color    = accentColor,
-                    fontSize = 10.sp,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
             }
         }
     }

@@ -1,296 +1,86 @@
 package com.artleader.mvp.ui.screens.main.tools
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.TrendingUp
-import androidx.compose.material.icons.filled.Whatshot
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.artleader.mvp.viewmodel.AttendanceViewModel
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
-private val BgDark  = Color(0xFF07080F)
-private val Neon    = Color(0xFFFFE44D)
-private val Pink    = Color(0xFFFF3D78)
-private val Blue    = Color(0xFF339CFF)
-private val Cyan    = Color(0xFF4EF7FF)
-private val Card1   = Color(0xFF12152A)
-private val Card2   = Color(0xFF0F1220)
-private val TextDim = Color(0xFF8A92B2)
-
-private data class HeroCard(val title: String, val sub: String, val brush: Brush)
-private data class QuickAction(val icon: ImageVector, val label: String, val tint: Color)
-private data class FeedItem(val title: String, val meta: String, val accent: Color)
+data class ToolCardUi(val title: String, val description: String, val icon: ImageVector)
 
 @Composable
-fun ToolsScreen(modifier: Modifier = Modifier) {
-    val heroCards = remember {
+fun ToolsScreen(attendanceViewModel: AttendanceViewModel, modifier: Modifier = Modifier) {
+    var selected by remember { mutableStateOf<ToolCardUi?>(null) }
+    if (selected?.title == "Attendance / NFC") {
+        AttendanceScreen(vm = attendanceViewModel, onBack = { selected = null })
+        return
+    }
+    val tools = remember {
         listOf(
-            HeroCard(
-                "Ваша волна", "Сегодняшний плейлист",
-                Brush.linearGradient(listOf(Color(0xFF6B0F6B), Color(0xFF1A0533), Color(0xFF091025)))
-            ),
-            HeroCard(
-                "Новые идеи", "Референсы и тренды",
-                Brush.linearGradient(listOf(Color(0xFF0A2A4A), Color(0xFF051020), Color(0xFF091025)))
-            ),
-            HeroCard(
-                "В ритме дня", "Инструменты и задачи",
-                Brush.linearGradient(listOf(Color(0xFF1A2B0A), Color(0xFF0E1A05), Color(0xFF091025)))
-            ),
+            ToolCardUi("Banner hole calculator", "Расчет периметра и точек крепежа", Icons.Default.Calculate),
+            ToolCardUi("Attendance / NFC", "Отметки входа/выхода и история смен", Icons.Default.BluetoothSearching),
+            ToolCardUi("Future tools", "Mesh sync, warehouse, QA modules", Icons.Default.Build)
         )
     }
-    val quickActions = remember {
-        listOf(
-            QuickAction(Icons.Default.PlayArrow,  "Плейлист", Pink),
-            QuickAction(Icons.Default.TrendingUp, "Тренды",   Blue),
-            QuickAction(Icons.Default.Whatshot,   "Хайп",     Neon),
-            QuickAction(Icons.Default.AutoAwesome,"AI микс",  Cyan),
-        )
-    }
-    val feedItems = remember {
-        listOf(
-            FeedItem("Мастерство наружной рекламы", "Тренинг • 12 мин", Pink),
-            FeedItem("Новые техники монтажа",        "Инструкция • 8 мин", Blue),
-            FeedItem("Топ-5 материалов сезона",      "Обзор • 5 мин",     Neon),
-            FeedItem("Командный брейнсторм",         "Сессия • 20 мин",   Cyan),
-        )
-    }
-
-    val glowAlpha by rememberInfiniteTransition(label = "glow").animateFloat(
-        initialValue = 0.22f, targetValue = 0.52f,
-        animationSpec = infiniteRepeatable(
-            tween(2800, easing = FastOutSlowInEasing), RepeatMode.Reverse
-        ),
-        label = "ga"
-    )
-
-    Box(modifier.fillMaxSize().background(BgDark)) {
-
-        // Ambient blobs
-        Box(
-            Modifier
-                .size(340.dp)
-                .offset((-60).dp, (-40).dp)
-                .blur(80.dp)
-                .background(
-                    Brush.radialGradient(listOf(Pink.copy(alpha = glowAlpha), Color.Transparent)),
-                    CircleShape
-                )
-        )
-        Box(
-            Modifier
-                .size(260.dp)
-                .align(Alignment.BottomEnd)
-                .offset(60.dp, 40.dp)
-                .blur(70.dp)
-                .background(
-                    Brush.radialGradient(listOf(Blue.copy(alpha = glowAlpha * 0.8f), Color.Transparent)),
-                    CircleShape
-                )
-        )
-
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-
-            // Header
-            Column(Modifier.padding(start = 20.dp, top = 52.dp, end = 20.dp, bottom = 8.dp)) {
-                Text(
-                    "ART LEADER",
-                    fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                    letterSpacing = 4.sp, color = TextDim
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Добро пожаловать",
-                    fontSize = 32.sp, fontWeight = FontWeight.Black,
-                    color = Color.White, lineHeight = 36.sp
-                )
-                Text("Ваша вселенная сегодня", color = TextDim, fontSize = 14.sp)
-            }
-
-            // Hero carousel
-            LazyRow(
-                contentPadding        = PaddingValues(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
+    Column(modifier.fillMaxSize().background(Color(0xFF07080F)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Tools", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
+        Text("Futuristic control center", color = Color(0xFF8EA2C8))
+        Spacer(Modifier.height(4.dp))
+        tools.forEach { tool ->
+            val isSelected = selected == tool
+            val scale by animateFloatAsState(if (isSelected) 0.98f else 1f, spring(Spring.DampingRatioMediumBouncy), label = "tool-scale")
+            Box(
+                Modifier.fillMaxWidth().scale(scale).clip(RoundedCornerShape(22.dp))
+                    .background(Brush.linearGradient(listOf(Color(0xFF121A2E), Color(0xFF10142A))))
+                    .border(1.dp, Color(0xFF4EF7FF).copy(if (isSelected) 0.65f else 0.3f), RoundedCornerShape(22.dp))
+                    .clickable { selected = tool }
+                    .padding(16.dp)
             ) {
-                items(heroCards) { card -> HeroCardItem(card) }
-            }
-
-            Spacer(Modifier.height(24.dp))
-
-            // Quick actions
-            SectionLabel("Быстрый старт")
-            LazyRow(
-                contentPadding        = PaddingValues(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(quickActions) { a -> QuickActionChip(a) }
-            }
-
-            Spacer(Modifier.height(24.dp))
-
-            // Feed
-            SectionLabel("Рекомендации")
-            Column(
-                Modifier.padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                feedItems.forEach { FeedCard(it) }
-            }
-
-            Spacer(Modifier.height(32.dp))
-        }
-    }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text     = text,
-        modifier = Modifier.padding(start = 20.dp, bottom = 10.dp),
-        color    = Color.White,
-        fontWeight = FontWeight.Bold,
-        fontSize = 18.sp
-    )
-}
-
-@Composable
-private fun HeroCardItem(card: HeroCard) {
-    Box(
-        Modifier
-            .widthIn(min = 240.dp, max = 280.dp)
-            .height(170.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .background(card.brush)
-            .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(listOf(Color.White.copy(0.12f), Color.Transparent)),
-                shape = RoundedCornerShape(28.dp)
-            )
-    ) {
-        // Subtle noise
-        Canvas(Modifier.fillMaxSize()) {
-            val dot = Color.White.copy(alpha = 0.04f)
-            var x = 0f
-            while (x <= size.width) {
-                var y = 0f
-                while (y <= size.height) {
-                    drawCircle(dot, 1f, Offset(x, y))
-                    y += 8f
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(tool.icon, null, tint = Color(0xFF4EF7FF), modifier = Modifier.size(24.dp))
+                    Text(tool.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text(tool.description, color = Color(0xFF8EA2C8), fontSize = 13.sp)
                 }
-                x += 8f
+                Icon(Icons.Default.ChevronRight, null, tint = Color(0xFF4EF7FF), modifier = Modifier.align(Alignment.CenterEnd))
             }
         }
-        Column(Modifier.align(Alignment.BottomStart).padding(20.dp)) {
-            Text(card.title, color = Color.White, fontWeight = FontWeight.Black, fontSize = 22.sp)
-            Text(card.sub,   color = Color.White.copy(0.6f), fontSize = 13.sp)
+        AnimatedVisibility(visible = selected?.title == "Banner hole calculator") {
+            Text("Калькулятор будет подключен в следующем инкременте через отдельный ViewModel модуль.", color = Color(0xFF8EA2C8))
         }
-        Box(
-            Modifier
-                .align(Alignment.TopEnd)
-                .padding(16.dp)
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(0.12f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Default.PlayArrow, contentDescription = null,
-                tint = Color.White, modifier = Modifier.size(20.dp))
-        }
-    }
-}
-
-@Composable
-private fun QuickActionChip(action: QuickAction) {
-    Column(
-        Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(Card1)
-            .border(1.dp, action.tint.copy(0.2f), RoundedCornerShape(20.dp))
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Box(
-            Modifier.size(40.dp).clip(CircleShape).background(action.tint.copy(0.15f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(action.icon, contentDescription = null,
-                tint = action.tint, modifier = Modifier.size(22.dp))
-        }
-        Text(action.label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-    }
-}
-
-@Composable
-private fun FeedCard(item: FeedItem) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Card2)
-            .border(1.dp, item.accent.copy(0.15f), RoundedCornerShape(20.dp))
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            Modifier
-                .width(4.dp)
-                .height(44.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(Brush.verticalGradient(listOf(item.accent, item.accent.copy(0.2f))))
-        )
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(item.title, color = Color.White, fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(item.meta, color = TextDim, fontSize = 12.sp)
-        }
-        Icon(Icons.Default.PlayArrow, contentDescription = null,
-            tint = item.accent, modifier = Modifier.size(22.dp))
     }
 }

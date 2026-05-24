@@ -81,9 +81,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.artleader.mvp.data.local.entity.ChatEntity
+import com.artleader.mvp.data.local.entity.ConversationEntity
 import com.artleader.mvp.data.local.entity.MessageEntity
-import com.artleader.mvp.data.local.entity.MessengerUserEntity
+import com.artleader.mvp.data.local.entity.PeerEntity
 import com.artleader.mvp.viewmodel.MessengerUiState
 import com.artleader.mvp.viewmodel.MessengerViewModel
 import java.text.SimpleDateFormat
@@ -156,6 +156,7 @@ fun MessengerScreen(vm: MessengerViewModel, modifier: Modifier = Modifier) {
                     users        = users,
                     onSelectChat = { vm.selectChat(it) },
                     onOpenPrivate = { vm.openPrivateChat(it) },
+                    onNewMessage = { vm.createNewMessage() },
                     onDiscovery  = { showDiscovery = true },
                     onEnableBt   = {
                         requestBtPermissions(permLauncher)
@@ -168,7 +169,7 @@ fun MessengerScreen(vm: MessengerViewModel, modifier: Modifier = Modifier) {
                     text         = text,
                     onTextChange = { text = it },
                     onSend       = { vm.send(text); text = "" },
-                    onBack       = { vm.refreshDevices() },
+                    onBack       = { vm.onBackFromChat() },
                     error        = ui.error
                 )
             }
@@ -198,12 +199,13 @@ fun MessengerScreen(vm: MessengerViewModel, modifier: Modifier = Modifier) {
 @Composable
 private fun ChatListPane(
     ui: MessengerUiState,
-    chats: List<ChatEntity>,
-    users: List<MessengerUserEntity>,
-    onSelectChat: (ChatEntity) -> Unit,
-    onOpenPrivate: (MessengerUserEntity) -> Unit,
+    chats: List<ConversationEntity>,
+    users: List<PeerEntity>,
+    onSelectChat: (ConversationEntity) -> Unit,
+    onOpenPrivate: (PeerEntity) -> Unit,
     onDiscovery: () -> Unit,
     onEnableBt: () -> Unit,
+    onNewMessage: () -> Unit,
 ) {
     Scaffold(
         containerColor = Color.Transparent,
@@ -217,7 +219,7 @@ private fun ChatListPane(
                     IconButton(onClick = onDiscovery) {
                         Icon(Icons.Default.Bluetooth, contentDescription = "Discover", tint = Neon)
                     }
-                    IconButton(onClick = { /* new chat */ }) {
+                    IconButton(onClick = onNewMessage) {
                         Icon(Icons.Default.Edit, contentDescription = "New chat", tint = Color.White)
                     }
                 }
@@ -350,8 +352,8 @@ private fun BtStatusRow(enabled: Boolean, status: String, onEnable: () -> Unit) 
 }
 
 @Composable
-private fun NearbyBubble(user: MessengerUserEntity, onClick: () -> Unit) {
-    val idx = (user.userId.hashCode() and 0xFF) % AvatarPalette.size
+private fun NearbyBubble(user: PeerEntity, onClick: () -> Unit) {
+    val idx = (user.peerId.hashCode() and 0xFF) % AvatarPalette.size
     Column(
         modifier              = Modifier.clickable(onClick = onClick),
         horizontalAlignment   = Alignment.CenterHorizontally,
