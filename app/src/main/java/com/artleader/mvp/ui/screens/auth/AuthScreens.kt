@@ -23,7 +23,7 @@ fun WelcomeScreen(onLogin: () -> Unit, onNewEmployee: () -> Unit, session: UserS
             Button(onClick = onLogin, shape = RoundedCornerShape(12.dp)) { Text("Войти") }
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = onNewEmployee) { Text("Новый сотрудник") }
-            if (session.biometricEnabled && session.username.isNotBlank()) {
+            if (session.biometricEnabled && session.hasEncryptedSession) {
                 Spacer(Modifier.height(8.dp))
                 TextButton(onClick = onBiometric) { Text("Войти через биометрию") }
             }
@@ -35,17 +35,15 @@ fun WelcomeScreen(onLogin: () -> Unit, onNewEmployee: () -> Unit, session: UserS
 fun LoginScreen(vm: MainViewModel, onSuccess: () -> Unit) {
     var login by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var rememberMe by remember { mutableStateOf(true) }
-    var biometric by remember { mutableStateOf(true) }
+        var biometric by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.Center) {
         OutlinedTextField(login, { login = it }, label = { Text("Логин") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(password, { password = it }, label = { Text("Пароль") }, modifier = Modifier.fillMaxWidth())
-        Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(rememberMe, { rememberMe = it }); Text("Запомнить меня") }
         Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(biometric, { biometric = it }); Text("Разрешить биометрию") }
         Spacer(Modifier.height(16.dp))
         Button(onClick = {
-            vm.login(login, password, rememberMe) { ok -> if (ok) { vm.enableBiometric(biometric); onSuccess() } else error = true }
+            vm.login(login, password, biometric) { ok -> if (ok) { onSuccess() } else error = true }
         }, modifier = Modifier.fillMaxWidth()) { Text("Войти") }
         if (error) Text("Неверные данные", color = MaterialTheme.colorScheme.error)
     }

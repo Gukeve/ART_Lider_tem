@@ -5,10 +5,17 @@ import com.artleader.mvp.data.local.entity.UserEntity
 
 class AuthRepository(private val userDao: UserDao) {
     private val seed = listOf(
-        UserEntity("admin", "admin123", "Администратор", "Admin", "1992-05-18"),
-        UserEntity("designer", "des123", "Дизайнер", "Designer"),
-        UserEntity("operator", "op123", "Оператор", "Operator"),
-        UserEntity("manager", "man123", "Менеджер", "Manager")
+        UserEntity("yulia", "1234", "Юля", "Operator"),
+        UserEntity("artem", "1234", "Артем", "Manager"),
+        UserEntity("viktor", "1234", "Виктор", "Operator"),
+        UserEntity("danil", "1234", "Данил", "Operator"),
+        UserEntity("sergey", "1234", "Сергей", "Operator"),
+        UserEntity("vitalik", "1234", "Виталик", "Admin"),
+        UserEntity("dima1", "1234", "Дима1", "Operator"),
+        UserEntity("dima2", "1234", "Дима2", "Operator"),
+        UserEntity("dima3", "1234", "Дима3", "Operator"),
+        UserEntity("sanya", "1234", "Саня", "Operator"),
+        UserEntity("gena", "1234", "Гена", "Operator")
     )
 
     suspend fun ensureSeed() = userDao.upsertAll(seed)

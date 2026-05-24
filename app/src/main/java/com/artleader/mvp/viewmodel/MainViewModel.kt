@@ -25,15 +25,15 @@ class MainViewModel(
     private val _user = MutableStateFlow<UserEntity?>(null)
     val user: StateFlow<UserEntity?> = _user.asStateFlow()
 
-    init { viewModelScope.launch { authRepository.ensureSeed() } }
+    init { viewModelScope.launch { authRepository.ensureSeed(); sessionStore.lockOnAppLaunch() } }
 
-    fun login(login: String, password: String, rememberMe: Boolean, onResult: (Boolean) -> Unit) = viewModelScope.launch {
+    fun login(login: String, password: String, biometricEnabled: Boolean, onResult: (Boolean) -> Unit) = viewModelScope.launch {
         _user.value = authRepository.login(login, password)
-        if (_user.value != null) sessionStore.saveLoggedIn(login, rememberMe)
+        if (_user.value != null) sessionStore.saveAuthenticated(login, biometricEnabled)
         onResult(_user.value != null)
     }
 
-    fun enableBiometric(enabled: Boolean) = viewModelScope.launch { sessionStore.setBiometricEnabled(enabled) }
+    fun unlockWithBiometric() = viewModelScope.launch { sessionStore.unlockWithBiometric() }
     fun logout() = viewModelScope.launch { _user.value = null; sessionStore.logout() }
     fun setAnimations(v: Boolean) = viewModelScope.launch { settingsStore.setAnimations(v) }
     fun setBirthday(v: Boolean) = viewModelScope.launch { settingsStore.setBirthday(v) }
