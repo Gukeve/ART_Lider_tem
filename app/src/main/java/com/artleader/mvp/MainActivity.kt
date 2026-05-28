@@ -1,7 +1,5 @@
 package com.artleader.mvp
 
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,7 +15,7 @@ import com.artleader.mvp.data.preferences.SessionStore
 import com.artleader.mvp.data.preferences.SettingsStore
 import com.artleader.mvp.data.repository.AttendanceRepository
 import com.artleader.mvp.data.repository.AuthRepository
-import com.artleader.mvp.data.repository.BluetoothRepository
+import com.artleader.mvp.data.repository.MessengerRepository
 import com.artleader.mvp.ui.navigation.AppNavGraph
 import com.artleader.mvp.ui.theme.ArtLeaderTheme
 import com.artleader.mvp.viewmodel.AttendanceViewModel
@@ -35,15 +33,7 @@ class MainActivity : ComponentActivity() {
         val sessionStore   = SessionStore(applicationContext)
         val authRepository = AuthRepository(db.userDao())
 
-        // Safely obtain BluetoothAdapter via system service (API 18+)
-        val btAdapter = (getSystemService(BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
-
-        val btRepo = BluetoothRepository(
-            com.artleader.mvp.bluetooth.BluetoothManager(btAdapter),
-            db.messageDao(),
-            db.conversationDao(),
-            db.peerDao()
-        )
+        val messengerRepository = MessengerRepository(db.messageDao(), db.conversationDao())
         val attendanceRepo = AttendanceRepository(db.attendanceDao())
 
         setContent {
@@ -51,7 +41,13 @@ class MainActivity : ComponentActivity() {
                 factory = vmFactory { MainViewModel(authRepository, settings, sessionStore) }
             )
             val messengerVm: MessengerViewModel = viewModel(
-                factory = vmFactory { MessengerViewModel(btRepo) }
+                factory = vmFactory {
+                    MessengerViewModel(
+                        repository = messengerRepository,
+                        myLogin = vm.session.value.username.ifBlank { "me" },
+                        myDisplayName = vm.session.value.displayName.ifBlank { "Вы" }
+                    )
+                }
             )
             val attendanceVm: AttendanceViewModel = viewModel(
                 factory = vmFactory { AttendanceViewModel(attendanceRepo) }

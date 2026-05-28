@@ -14,5 +14,9 @@ data class MessageEntity(
     val ttl: Int = 6,
     val deliveryState: String,
     val timestamp: Long,
-    val isMine: Boolean
+    val isMine: Boolean,
+    val packetId: Long = 0L,
+    val hopCount: Int = 0,
+    val isRelayed: Boolean = false,
+    val attachmentJson: String? = null
 )
