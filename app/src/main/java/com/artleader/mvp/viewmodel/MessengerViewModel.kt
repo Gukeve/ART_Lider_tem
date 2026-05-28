@@ -7,7 +7,6 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.artleader.mvp.bluetooth.ble.BleMessengerService
 import com.artleader.mvp.bluetooth.mesh.NearbyPeer
 import com.artleader.mvp.bluetooth.mesh.PacketType
 import com.artleader.mvp.data.local.entity.ConversationEntity
