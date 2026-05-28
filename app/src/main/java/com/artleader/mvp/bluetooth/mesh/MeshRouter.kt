@@ -11,11 +11,11 @@ class MeshRouter(
         if (!seenPackets.add(packet.packetId)) return
         if (packet.senderId == localPeerId) return
 
-        if (packet.targetId == null || packet.targetId == localPeerId) {
+        if (packet.isBroadcast || packet.targetId == localPeerId) {
             onDeliver(packet)
         }
-        if (packet.shouldRelay()) {
-            onRelay(packet.forRelay())
+        if (packet.shouldRelay) {
+            onRelay(packet.relayed())
         }
     }
 }
