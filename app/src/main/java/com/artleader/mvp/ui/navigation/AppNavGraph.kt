@@ -1,6 +1,7 @@
 package com.artleader.mvp.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.navigation.NavHostController
@@ -23,6 +24,10 @@ fun AppNavGraph(
 ) {
     val session by vm.session.collectAsState()
 
+    LaunchedEffect(session.username, session.displayName) {
+        messengerViewModel.updateIdentity(session.username, session.displayName)
+    }
+
     // Determine start destination based on current session state.
     // MainViewModel.init calls lockOnAppLaunch() so on cold start isLoggedIn == false.
     // After login / biometric unlock isLoggedIn becomes true and nav reacts reactively.
@@ -36,9 +41,12 @@ fun AppNavGraph(
                 onNewEmployee = { navController.navigate("new") },
                 session       = session,
                 onBiometric   = {
-                    vm.unlockWithBiometric()
-                    navController.navigate("main") {
-                        popUpTo("welcome") { inclusive = true }
+                    vm.unlockWithBiometric { ok ->
+                        if (ok) {
+                            navController.navigate("main") {
+                                popUpTo("welcome") { inclusive = true }
+                            }
+                        }
                     }
                 }
             )

@@ -94,7 +94,8 @@ class BluetoothRepository(
                 ttl              = 6,
                 deliveryState    = "delivered",
                 timestamp        = System.currentTimeMillis(),
-                isMine           = isMine
+                isMine           = isMine,
+                isRelayed        = !isMine
             )
         )
     }

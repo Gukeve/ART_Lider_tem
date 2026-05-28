@@ -32,9 +32,12 @@ data class MessengerUiState(
 
 class MessengerViewModel(
     private val repository: MessengerRepository,
-    private val myLogin: String,
-    private val myDisplayName: String
+    myLogin: String,
+    myDisplayName: String
 ) : ViewModel() {
+
+    private var myLogin: String = myLogin
+    private var myDisplayName: String = myDisplayName
 
     private val _ui = MutableStateFlow(MessengerUiState())
     val ui: StateFlow<MessengerUiState> = _ui.asStateFlow()
@@ -51,6 +54,11 @@ class MessengerViewModel(
             state.selectedChatId?.let { repository.messagesForChat(it) } ?: flowOf(emptyList())
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun updateIdentity(login: String, displayName: String) {
+        if (login.isNotBlank()) myLogin = login
+        if (displayName.isNotBlank()) myDisplayName = displayName
+    }
 
     // ── BLE Service binding ──────────────────────────────────────────────────
     private var bleService: BleMessengerService? = null
@@ -101,7 +109,7 @@ class MessengerViewModel(
                 if (packet.type != PacketType.MESSAGE) return@collect
                 val text     = packet.payload.decodeToString()
                 val isMine   = packet.senderId == myLogin.hashCode().toLong()
-                val chatId   = deriveChatId(packet.senderId, myLogin.hashCode().toLong(), isMine)
+                val chatId   = deriveChatId(packet.senderId, myLogin.hashCode().toLong())
                 val senderName = bleService?.peerRegistry?.get(packet.senderId)?.displayName
                     ?: "Peer"
 
@@ -128,7 +136,7 @@ class MessengerViewModel(
 
     // ── Chat management ──────────────────────────────────────────────────────
     fun openPrivateChat(peer: NearbyPeer) = viewModelScope.launch {
-        val chatId = deriveChatId(peer.peerId, myLogin.hashCode().toLong(), isMine = false)
+        val chatId = deriveChatId(peer.peerId, myLogin.hashCode().toLong())
         ensureConversation(chatId, peer.displayName, peer.peerId)
         _ui.value = _ui.value.copy(selectedChatId = chatId)
     }
@@ -174,7 +182,7 @@ class MessengerViewModel(
      * Deterministic chat ID for a private conversation between two peers.
      * Always the same regardless of which side initiates.
      */
-    private fun deriveChatId(peerId1: Long, peerId2: Long, isMine: Boolean): String {
+    private fun deriveChatId(peerId1: Long, peerId2: Long): String {
         val sorted = listOf(peerId1, peerId2).sorted()
         return "private_${sorted[0]}_${sorted[1]}"
     }

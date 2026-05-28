@@ -22,7 +22,7 @@ import com.artleader.mvp.data.local.entity.UserEntity
  *   1–4  legacy
  *   5    phase-2: added PeerEntity, ConversationEntity, AttendanceEventEntity
  *   6    phase-3: mesh-ready MessageEntity (packetId, hopCount, isRelayed, attachmentJson)
- *                 extended UserEntity (employmentStart, avatarUri, rating, projectCount, etc.)
+ *                 extended UserEntity (employmentStart, avatar, rating, projectCount, etc.)
  */
 @Database(
     entities = [
@@ -56,7 +56,7 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE messages ADD COLUMN attachmentJson TEXT")
                 // UserEntity new columns
                 db.execSQL("ALTER TABLE users ADD COLUMN employmentStart TEXT NOT NULL DEFAULT '2022-01-01'")
-                db.execSQL("ALTER TABLE users ADD COLUMN avatarUri TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE users ADD COLUMN avatar TEXT NOT NULL DEFAULT ''")
                 db.execSQL("ALTER TABLE users ADD COLUMN rating REAL NOT NULL DEFAULT 4.5")
                 db.execSQL("ALTER TABLE users ADD COLUMN projectCount INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE users ADD COLUMN productionPercent INTEGER NOT NULL DEFAULT 85")

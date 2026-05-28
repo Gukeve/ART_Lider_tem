@@ -14,4 +14,7 @@ interface ConversationDao {
 
     @Query("SELECT * FROM conversations ORDER BY lastTimestamp DESC")
     fun observeConversations(): Flow<List<ConversationEntity>>
+
+    @Query("UPDATE conversations SET lastMessage = :message, lastTimestamp = :timestamp WHERE conversationId = :conversationId")
+    suspend fun updateLastMessage(conversationId: String, message: String, timestamp: Long)
 }
