@@ -7,6 +7,8 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.artleader.mvp.bluetooth.ble.BleMessengerService
+import com.artleader.mvp.bluetooth.mesh.MeshPacket
 import com.artleader.mvp.bluetooth.mesh.NearbyPeer
 import com.artleader.mvp.bluetooth.mesh.PacketType
 import com.artleader.mvp.data.local.entity.ConversationEntity
@@ -20,7 +22,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 data class MessengerUiState(
     val meshActive: Boolean   = false,
@@ -64,7 +65,7 @@ class MessengerViewModel(
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder?) {
-            bleService = BleMessengerService.instance
+            bleService = (binder as? BleMessengerService.LocalBinder)?.service() ?: BleMessengerService.instance
             _ui.value = _ui.value.copy(meshActive = true, statusText = "Поиск рядом…")
             observePeerRegistry()
             observeIncomingPackets()
@@ -107,8 +108,11 @@ class MessengerViewModel(
             bleService?.incomingPackets?.collect { packet ->
                 if (packet.type != PacketType.MESSAGE) return@collect
                 val text     = packet.payload.decodeToString()
-                val isMine   = packet.senderId == myLogin.hashCode().toLong()
-                val chatId   = deriveChatId(packet.senderId, myLogin.hashCode().toLong())
+                val localPeerId = myLogin.hashCode().toLong()
+                val isMine   = packet.senderId == localPeerId
+                if (isMine) return@collect
+
+                val chatId   = deriveChatId(packet.senderId, localPeerId)
                 val senderName = bleService?.peerRegistry?.get(packet.senderId)?.displayName
                     ?: "Peer"
 
@@ -117,16 +121,17 @@ class MessengerViewModel(
 
                 repository.saveMessage(
                     MessageEntity(
-                        messageId        = UUID.randomUUID().toString(),
+                        messageId        = "packet_${packet.packetId}",
                         chatId           = chatId,
                         senderId         = packet.senderId.toString(),
-                        senderName       = if (isMine) myDisplayName else senderName,
+                        senderName       = senderName,
+                        targetId         = packet.targetId.takeIf { it != MeshPacket.BROADCAST_TARGET }?.toString(),
                         encryptedPayload = text,
                         deliveryState    = "delivered",
                         timestamp        = packet.timestamp,
-                        isMine           = isMine,
+                        isMine           = false,
                         packetId         = packet.packetId,
-                        hopCount         = packet.hopCount.toInt()
+                        hopCount         = packet.hopCount
                     )
                 )
             }
@@ -153,26 +158,29 @@ class MessengerViewModel(
         val chatId = _ui.value.selectedChatId ?: return
         if (text.isBlank()) return
 
+        val targetPeerId = targetPeerIdForChat(chatId)
+        val packet = bleService?.sendMessage(text, targetPeerId) ?: run {
+            _ui.value = _ui.value.copy(error = "Mesh не активен")
+            return
+        }
+
         viewModelScope.launch {
-            // Persist locally immediately (optimistic)
+            // Persist locally with the packet id assigned by the BLE mesh service.
             val entity = MessageEntity(
-                messageId        = UUID.randomUUID().toString(),
+                messageId        = "packet_${packet.packetId}",
                 chatId           = chatId,
                 senderId         = myLogin,
                 senderName       = myDisplayName,
+                targetId         = targetPeerId.takeIf { it != MeshPacket.BROADCAST_TARGET }?.toString(),
                 encryptedPayload = text,
-                deliveryState    = "sending",
-                timestamp        = System.currentTimeMillis(),
+                deliveryState    = "sent",
+                timestamp        = packet.timestamp,
                 isMine           = true,
-                packetId         = System.currentTimeMillis() // placeholder until BLE assigns one
+                packetId         = packet.packetId,
+                hopCount         = packet.hopCount
             )
             repository.saveMessage(entity)
             repository.updateLastMessage(chatId, text, entity.timestamp)
-        }
-
-        // BLE broadcast (fire and forget — delivery is best-effort over mesh)
-        bleService?.sendMessage(text) ?: run {
-            _ui.value = _ui.value.copy(error = "Mesh не активен")
         }
     }
 
@@ -184,6 +192,14 @@ class MessengerViewModel(
     private fun deriveChatId(peerId1: Long, peerId2: Long): String {
         val sorted = listOf(peerId1, peerId2).sorted()
         return "private_${sorted[0]}_${sorted[1]}"
+    }
+
+    private fun targetPeerIdForChat(chatId: String): Long {
+        val prefix = "private_"
+        if (!chatId.startsWith(prefix)) return MeshPacket.BROADCAST_TARGET
+        val participants = chatId.removePrefix(prefix).split("_").mapNotNull { it.toLongOrNull() }
+        val myPeerId = myLogin.hashCode().toLong()
+        return participants.firstOrNull { it != myPeerId } ?: MeshPacket.BROADCAST_TARGET
     }
 
     private suspend fun ensureConversation(chatId: String, peerName: String, peerId: Long) {

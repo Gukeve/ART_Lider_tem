@@ -107,6 +107,7 @@ class BleMessengerService : Service() {
     // ── GATT clients (central role, one per connected peripheral) ────────────
     private val gattClients = mutableMapOf<String, BluetoothGatt>()           // address -> gatt
     private val peerWriteChars = mutableMapOf<String, BluetoothGattCharacteristic>() // address -> RX char
+    private val peerRssiByAddress = mutableMapOf<String, Int>()
 
     // ── Mesh state ───────────────────────────────────────────────────────────
     val peerRegistry   = PeerRegistry()
@@ -144,7 +145,13 @@ class BleMessengerService : Service() {
         return START_STICKY
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    private val binder = LocalBinder()
+
+    inner class LocalBinder : android.os.Binder() {
+        fun service(): BleMessengerService = this@BleMessengerService
+    }
+
+    override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onDestroy() {
         stopMesh()
@@ -320,6 +327,7 @@ class BleMessengerService : Service() {
             val device = result.device
             val addr   = device.address
             if (gattClients.containsKey(addr)) return // already connected
+            peerRssiByAddress[addr] = result.rssi
             Log.d(TAG, "Found peer: $addr (RSSI ${result.rssi})")
             connectToPeripheral(device, result.rssi)
         }
@@ -401,8 +409,9 @@ class BleMessengerService : Service() {
                 PacketType.ANNOUNCE -> handleAnnounce(packet, fromAddress)
                 PacketType.MESSAGE  -> handleMessage(packet, fromAddress)
                 PacketType.PING     -> sendPong(fromAddress, packet.senderId)
-                PacketType.PONG     -> {}  // update last-seen via announce
-                else                -> {}
+                PacketType.PONG     -> handlePong(packet)
+                PacketType.HELLO,
+                PacketType.ACK      -> handleMessage(packet, fromAddress)
             }
 
             // Relay if TTL allows and it's not addressed only to us
@@ -419,14 +428,21 @@ class BleMessengerService : Service() {
             peerId = packet.senderId,
             peerIdHex = packet.senderId.toHexString(),
             displayName = name.ifBlank { "Peer" },
-            rssi = -70 // updated on next scan
+            rssi = peerRssiByAddress[fromAddress] ?: Int.MIN_VALUE
         )
         peerRegistry.upsert(peer)
         Log.d(TAG, "Peer announced: ${peer.displayName} @ $fromAddress")
     }
 
     private suspend fun handleMessage(packet: MeshPacket, fromAddress: String) {
-        _incomingPackets.emit(packet)
+        if (packet.isBroadcast || packet.targetId == myPeerId || packet.senderId == myPeerId) {
+            _incomingPackets.emit(packet)
+        }
+    }
+
+    private fun handlePong(packet: MeshPacket) {
+        val peer = peerRegistry.get(packet.senderId) ?: return
+        peerRegistry.upsert(peer.copy(lastSeenAt = System.currentTimeMillis()))
     }
 
     private fun sendPong(toAddress: String, targetId: Long) {
@@ -441,13 +457,14 @@ class BleMessengerService : Service() {
     /**
      * Send a text message to all connected peers (broadcast) or a specific peer.
      */
-    fun sendMessage(text: String, targetPeerId: Long = MeshPacket.BROADCAST_TARGET) {
+    fun sendMessage(text: String, targetPeerId: Long = MeshPacket.BROADCAST_TARGET): MeshPacket {
         val payload = text.encodeToByteArray().take(400).toByteArray()
         val packet  = MeshPacket.create(PacketType.MESSAGE, myPeerId, targetPeerId, payload)
         broadcast(packet.toBytes())
         // Add to dedup so we don't echo our own packet back
         dedup.isDuplicate(packet.packetId)
         scope.launch { _incomingPackets.emit(packet.copy(/* mark as mine for UI */)) }
+        return packet
     }
 
     private fun sendAnnounce(toAddress: String? = null) {
@@ -512,6 +529,7 @@ class BleMessengerService : Service() {
             while (true) {
                 delay(15_000)
                 peerRegistry.pruneStale()
+                dedup.pruneStale()
                 // Re-announce ourselves periodically
                 if (peerWriteChars.isNotEmpty()) broadcastAnnounce()
             }
@@ -528,7 +546,9 @@ class BleMessengerService : Service() {
             "Mesh Messenger",
             NotificationManager.IMPORTANCE_LOW
         ).apply { description = "Art Leader BLE mesh communication" }
-        Context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        }
     }
 
     private fun buildNotification(): Notification =
