@@ -19,7 +19,12 @@ class BluetoothRepository(
     private val peerDao: PeerDao
 ) {
     fun isEnabled() = manager.isEnabled()
-    fun bondedDevices(): List<BluetoothDevice> = manager.bondedDevices()
+    fun bondedDevices(): List<BluetoothDevice> = try {
+        manager.bondedDevices()
+    } catch (e: SecurityException) {
+        emptyList()
+    }
+
     suspend fun connect(device: BluetoothDevice): BluetoothSocket = manager.connect(device)
     suspend fun accept(): BluetoothSocket = manager.accept()
     suspend fun send(socket: BluetoothSocket, text: String) = manager.send(socket, text)
@@ -29,27 +34,68 @@ class BluetoothRepository(
     fun observePeers(): Flow<List<PeerEntity>> = peerDao.observePeers()
     fun messages(chatId: String): Flow<List<MessageEntity>> = messageDao.messagesForChat(chatId)
 
+    /**
+     * Discovers peers from bonded BT devices.
+     * Wrapped in try-catch: BLUETOOTH_CONNECT permission may not be granted yet on Android 12+,
+     * which would throw SecurityException. Graceful no-op is safe — user can retry via UI.
+     */
     suspend fun discoverPeers() {
-        val bonded = bondedDevices().mapIndexed { index, d ->
-            PeerEntity(
-                peerId = d.address,
-                username = d.name ?: "Peer ${index + 1}",
-                avatar = "",
-                deviceId = d.address,
-                bluetoothId = d.address,
-                online = true
-            )
+        try {
+            val bonded = bondedDevices().mapIndexed { index, d ->
+                @Suppress("MissingPermission")
+                PeerEntity(
+                    peerId      = d.address,
+                    username    = try { d.name } catch (e: SecurityException) { null } ?: "Peer ${index + 1}",
+                    avatar      = "",
+                    deviceId    = d.address,
+                    bluetoothId = d.address,
+                    online      = true
+                )
+            }
+            if (bonded.isNotEmpty()) {
+                peerDao.upsertAll(bonded)
+            }
+        } catch (e: SecurityException) {
+            // Permission not granted yet — will retry when user grants BT permissions via UI
+        } catch (e: Exception) {
+            // Any other BT error is non-fatal
         }
-        peerDao.upsertAll(bonded)
     }
 
     suspend fun createPrivateChat(withUser: PeerEntity, ownerId: String = "me"): String {
         val id = "private_${withUser.peerId}"
-        conversationDao.upsert(ConversationEntity(id, withUser.username, "private", ownerId, "$ownerId,${withUser.peerId}"))
+        conversationDao.upsert(
+            ConversationEntity(
+                conversationId = id,
+                title          = withUser.username,
+                type           = "private",
+                ownerId        = ownerId,
+                participantIds = "$ownerId,${withUser.peerId}"
+            )
+        )
         return id
     }
 
-    suspend fun saveMessage(chatId: String, text: String, isMine: Boolean, senderId: String = "me", senderName: String = "Вы") {
-        messageDao.insert(MessageEntity(UUID.randomUUID().toString(), chatId, senderId, senderName, null, text, 6, "delivered", System.currentTimeMillis(), isMine))
+    suspend fun saveMessage(
+        chatId: String,
+        text: String,
+        isMine: Boolean,
+        senderId: String = "me",
+        senderName: String = "Вы"
+    ) {
+        messageDao.insert(
+            MessageEntity(
+                messageId        = UUID.randomUUID().toString(),
+                chatId           = chatId,
+                senderId         = senderId,
+                senderName       = senderName,
+                targetId         = null,
+                encryptedPayload = text,
+                ttl              = 6,
+                deliveryState    = "delivered",
+                timestamp        = System.currentTimeMillis(),
+                isMine           = isMine
+            )
+        )
     }
 }

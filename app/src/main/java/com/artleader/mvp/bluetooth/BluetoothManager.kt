@@ -12,7 +12,21 @@ import java.io.InputStreamReader
 import java.io.PrintWriter
 import java.util.UUID
 
+/**
+ * Wrapper around Android Bluetooth APIs.
+ *
+ * NOTE: This class is intentionally named `BluetoothManager` within this package.
+ * In MainActivity we must import this class using its fully qualified name
+ * (com.artleader.mvp.bluetooth.BluetoothManager) to avoid a clash with the system
+ * class android.bluetooth.BluetoothManager — see MainActivity.kt.
+ *
+ * All methods that require BLUETOOTH_CONNECT / BLUETOOTH_SCAN are annotated with
+ * @SuppressLint("MissingPermission"). Callers must ensure permissions are granted
+ * before invoking these methods; otherwise a SecurityException will be thrown and
+ * should be caught at the call site (see BluetoothRepository.discoverPeers).
+ */
 class BluetoothManager(private val adapter: BluetoothAdapter?) {
+
     companion object {
         val APP_UUID: UUID = UUID.fromString("3b2b7e6e-f792-4d2b-bfd0-c7e9ed9f421a")
         private const val SERVICE_NAME = "ArtLeaderMessenger"
@@ -20,9 +34,11 @@ class BluetoothManager(private val adapter: BluetoothAdapter?) {
 
     fun isEnabled(): Boolean = adapter?.isEnabled == true
 
+    /** @throws SecurityException if BLUETOOTH_CONNECT not granted on API 31+ */
     @SuppressLint("MissingPermission")
     fun bondedDevices(): List<BluetoothDevice> = adapter?.bondedDevices?.toList().orEmpty()
 
+    /** @throws SecurityException if BLUETOOTH_CONNECT not granted on API 31+ */
     @SuppressLint("MissingPermission")
     suspend fun connect(device: BluetoothDevice): BluetoothSocket = withContext(Dispatchers.IO) {
         val socket = device.createRfcommSocketToServiceRecord(APP_UUID)
@@ -30,10 +46,12 @@ class BluetoothManager(private val adapter: BluetoothAdapter?) {
         socket
     }
 
+    /** @throws SecurityException if BLUETOOTH_CONNECT not granted on API 31+ */
     @SuppressLint("MissingPermission")
     suspend fun accept(): BluetoothSocket = withContext(Dispatchers.IO) {
-        val server: BluetoothServerSocket = adapter?.listenUsingRfcommWithServiceRecord(SERVICE_NAME, APP_UUID)
-            ?: error("Bluetooth недоступен")
+        val server: BluetoothServerSocket =
+            adapter?.listenUsingRfcommWithServiceRecord(SERVICE_NAME, APP_UUID)
+                ?: error("Bluetooth недоступен")
         server.use { it.accept() }
     }
 

@@ -21,3 +21,10 @@ class AuthRepository(private val userDao: UserDao) {
     suspend fun ensureSeed() = userDao.upsertAll(seed)
     suspend fun login(login: String, password: String) = userDao.login(login, password)
 }
+suspend fun getUser(login: String): UserEntity? {
+    return userDao.getUser(login)
+}
+
+suspend fun updateAvatar(login: String, avatar: String) {
+    userDao.updateAvatar(login, avatar)
+}

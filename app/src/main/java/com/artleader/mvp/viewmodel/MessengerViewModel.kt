@@ -1,83 +1,197 @@
 package com.artleader.mvp.viewmodel
 
-import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothSocket
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
+import android.os.IBinder
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.artleader.mvp.bluetooth.ble.BleMessengerService
+import com.artleader.mvp.bluetooth.mesh.NearbyPeer
+import com.artleader.mvp.bluetooth.mesh.PacketType
 import com.artleader.mvp.data.local.entity.ConversationEntity
 import com.artleader.mvp.data.local.entity.MessageEntity
-import com.artleader.mvp.data.local.entity.PeerEntity
-import com.artleader.mvp.data.repository.BluetoothRepository
+import com.artleader.mvp.data.repository.MessengerRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 data class MessengerUiState(
-    val bluetoothEnabled: Boolean = false,
-    val connectionState: String = "Bluetooth выключен",
+    val meshActive: Boolean   = false,
+    val statusText: String    = "Инициализация…",
     val selectedChatId: String? = null,
-    val devices: List<BluetoothDevice> = emptyList(),
-    val knownPeers: List<PeerEntity> = emptyList(),
-    val error: String? = null
+    val error: String?        = null
 )
 
-class MessengerViewModel(private val repository: BluetoothRepository) : ViewModel() {
-    private val _ui = MutableStateFlow(MessengerUiState(bluetoothEnabled = repository.isEnabled()))
+class MessengerViewModel(
+    private val repository: MessengerRepository,
+    private val myLogin: String,
+    private val myDisplayName: String
+) : ViewModel() {
+
+    private val _ui = MutableStateFlow(MessengerUiState())
     val ui: StateFlow<MessengerUiState> = _ui.asStateFlow()
 
-    val chats = repository.observeConversations().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val users = repository.observePeers().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val messages: StateFlow<List<MessageEntity>> = ui.flatMapLatest { repository.messages(it.selectedChatId ?: "") }
+    // Nearby peers come directly from BleMessengerService's PeerRegistry
+    private val _nearbyPeers = MutableStateFlow<List<NearbyPeer>>(emptyList())
+    val nearbyPeers: StateFlow<List<NearbyPeer>> = _nearbyPeers.asStateFlow()
+
+    val chats = repository.observeConversations()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    private var socket: BluetoothSocket? = null
+    val messages: StateFlow<List<MessageEntity>> = _ui
+        .flatMapLatest { state ->
+            state.selectedChatId?.let { repository.messagesForChat(it) } ?: flowOf(emptyList())
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    init { viewModelScope.launch { repository.discoverPeers() } }
+    // ── BLE Service binding ──────────────────────────────────────────────────
+    private var bleService: BleMessengerService? = null
 
-    fun refreshDevices() {
-        val enabled = repository.isEnabled()
-        _ui.value = _ui.value.copy(
-            bluetoothEnabled = enabled,
-            connectionState = if (enabled) "Поиск устройств" else "Bluetooth выключен",
-            devices = repository.bondedDevices(),
-            error = null
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, binder: IBinder?) {
+            bleService = BleMessengerService.instance
+            _ui.value = _ui.value.copy(meshActive = true, statusText = "Поиск рядом…")
+            observePeerRegistry()
+            observeIncomingPackets()
+        }
+        override fun onServiceDisconnected(name: ComponentName) {
+            bleService = null
+            _ui.value = _ui.value.copy(meshActive = false, statusText = "Переподключение…")
+        }
+    }
+
+    fun bindService(context: Context) {
+        val intent = Intent(context, BleMessengerService::class.java).apply {
+            putExtra(BleMessengerService.EXTRA_DISPLAY_NAME, myDisplayName)
+            putExtra(BleMessengerService.EXTRA_PEER_ID, myLogin.hashCode().toLong())
+        }
+        context.startForegroundService(intent)
+        context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+    }
+
+    fun unbindService(context: Context) {
+        try { context.unbindService(serviceConnection) } catch (_: Exception) {}
+    }
+
+    // ── Peer registry observation ────────────────────────────────────────────
+    private fun observePeerRegistry() {
+        viewModelScope.launch {
+            bleService?.peerRegistry?.peers?.collect { peers ->
+                _nearbyPeers.value = peers
+                val count = peers.count { it.isOnline }
+                _ui.value = _ui.value.copy(
+                    statusText = if (count > 0) "$count рядом" else "Поиск рядом…"
+                )
+            }
+        }
+    }
+
+    // ── Incoming packet observation ───────────────────────────────────────────
+    private fun observeIncomingPackets() {
+        viewModelScope.launch {
+            bleService?.incomingPackets?.collect { packet ->
+                if (packet.type != PacketType.MESSAGE) return@collect
+                val text     = packet.payload.decodeToString()
+                val isMine   = packet.senderId == myLogin.hashCode().toLong()
+                val chatId   = deriveChatId(packet.senderId, myLogin.hashCode().toLong(), isMine)
+                val senderName = bleService?.peerRegistry?.get(packet.senderId)?.displayName
+                    ?: "Peer"
+
+                // Ensure conversation exists
+                ensureConversation(chatId, senderName, packet.senderId)
+
+                repository.saveMessage(
+                    MessageEntity(
+                        messageId        = UUID.randomUUID().toString(),
+                        chatId           = chatId,
+                        senderId         = packet.senderId.toString(),
+                        senderName       = if (isMine) myDisplayName else senderName,
+                        encryptedPayload = text,
+                        deliveryState    = "delivered",
+                        timestamp        = packet.timestamp,
+                        isMine           = isMine,
+                        packetId         = packet.packetId,
+                        hopCount         = packet.hopCount.toInt()
+                    )
+                )
+            }
+        }
+    }
+
+    // ── Chat management ──────────────────────────────────────────────────────
+    fun openPrivateChat(peer: NearbyPeer) = viewModelScope.launch {
+        val chatId = deriveChatId(peer.peerId, myLogin.hashCode().toLong(), isMine = false)
+        ensureConversation(chatId, peer.displayName, peer.peerId)
+        _ui.value = _ui.value.copy(selectedChatId = chatId)
+    }
+
+    fun selectChat(chat: ConversationEntity) {
+        _ui.value = _ui.value.copy(selectedChatId = chat.conversationId)
+    }
+
+    fun onBackFromChat() {
+        _ui.value = _ui.value.copy(selectedChatId = null, error = null)
+    }
+
+    // ── Sending ──────────────────────────────────────────────────────────────
+    fun send(text: String) {
+        val chatId = _ui.value.selectedChatId ?: return
+        if (text.isBlank()) return
+
+        viewModelScope.launch {
+            // Persist locally immediately (optimistic)
+            val entity = MessageEntity(
+                messageId        = UUID.randomUUID().toString(),
+                chatId           = chatId,
+                senderId         = myLogin,
+                senderName       = myDisplayName,
+                encryptedPayload = text,
+                deliveryState    = "sending",
+                timestamp        = System.currentTimeMillis(),
+                isMine           = true,
+                packetId         = System.currentTimeMillis() // placeholder until BLE assigns one
+            )
+            repository.saveMessage(entity)
+            repository.updateLastMessage(chatId, text, entity.timestamp)
+        }
+
+        // BLE broadcast (fire and forget — delivery is best-effort over mesh)
+        bleService?.sendMessage(text) ?: run {
+            _ui.value = _ui.value.copy(error = "Mesh не активен")
+        }
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    /**
+     * Deterministic chat ID for a private conversation between two peers.
+     * Always the same regardless of which side initiates.
+     */
+    private fun deriveChatId(peerId1: Long, peerId2: Long, isMine: Boolean): String {
+        val sorted = listOf(peerId1, peerId2).sorted()
+        return "private_${sorted[0]}_${sorted[1]}"
+    }
+
+    private suspend fun ensureConversation(chatId: String, peerName: String, peerId: Long) {
+        repository.ensureConversation(
+            ConversationEntity(
+                conversationId = chatId,
+                title          = peerName,
+                type           = "private",
+                ownerId        = myLogin,
+                participantIds = "$myLogin,${peerId}"
+            )
         )
-        viewModelScope.launch { repository.discoverPeers() }
     }
 
-    fun openPrivateChat(user: PeerEntity) = viewModelScope.launch { _ui.value = _ui.value.copy(selectedChatId = repository.createPrivateChat(user)) }
-    fun selectChat(chat: ConversationEntity) { _ui.value = _ui.value.copy(selectedChatId = chat.conversationId) }
-    fun onBackFromChat() { _ui.value = _ui.value.copy(selectedChatId = null, error = null) }
-    fun createNewMessage() = viewModelScope.launch {
-        val first = users.value.firstOrNull() ?: return@launch
-        _ui.value = _ui.value.copy(selectedChatId = repository.createPrivateChat(first))
-    }
-
-
-    fun connect(device: BluetoothDevice) = viewModelScope.launch {
-        runCatching {
-            socket = repository.connect(device)
-            _ui.value = _ui.value.copy(connectionState = "Подключено: ${device.name ?: device.address}")
-        }.onFailure { _ui.value = _ui.value.copy(error = "Ошибка подключения") }
-    }
-
-    fun waitForIncoming() = viewModelScope.launch {
-        runCatching {
-            _ui.value = _ui.value.copy(connectionState = "Ожидание входящего подключения")
-            socket = repository.accept()
-            _ui.value = _ui.value.copy(connectionState = "Входящее подключение установлено")
-        }.onFailure { _ui.value = _ui.value.copy(error = "Ошибка ожидания входящего подключения") }
-    }
-
-    fun send(text: String) = viewModelScope.launch {
-        val chatId = _ui.value.selectedChatId ?: return@launch
-        runCatching {
-            repository.saveMessage(chatId, text, true)
-            socket?.let { repository.send(it, text) }
-        }.onFailure { _ui.value = _ui.value.copy(error = "Ошибка отправки") }
+    override fun onCleared() {
+        super.onCleared()
     }
 }

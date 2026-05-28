@@ -13,4 +13,10 @@ interface UserDao {
 
     @Query("SELECT * FROM users WHERE login=:login AND password=:password LIMIT 1")
     suspend fun login(login: String, password: String): UserEntity?
+
+@Query("SELECT * FROM users WHERE login = :login LIMIT 1")
+suspend fun getUser(login: String): UserEntity?
+
+@Query("UPDATE users SET avatar = :avatar WHERE login = :login")
+suspend fun updateAvatar(login: String, avatar: String)
 }

@@ -15,20 +15,52 @@ import com.artleader.mvp.viewmodel.MainViewModel
 import com.artleader.mvp.viewmodel.MessengerViewModel
 
 @Composable
-fun AppNavGraph(navController: NavHostController, vm: MainViewModel, messengerViewModel: MessengerViewModel, attendanceViewModel: AttendanceViewModel) {
+fun AppNavGraph(
+    navController: NavHostController,
+    vm: MainViewModel,
+    messengerViewModel: MessengerViewModel,
+    attendanceViewModel: AttendanceViewModel
+) {
     val session by vm.session.collectAsState()
+
+    // Determine start destination based on current session state.
+    // MainViewModel.init calls lockOnAppLaunch() so on cold start isLoggedIn == false.
+    // After login / biometric unlock isLoggedIn becomes true and nav reacts reactively.
     val start = if (session.isLoggedIn) "main" else "welcome"
+
     NavHost(navController = navController, startDestination = start) {
+
         composable("welcome") {
             WelcomeScreen(
-                onLogin = { navController.navigate("login") },
+                onLogin       = { navController.navigate("login") },
                 onNewEmployee = { navController.navigate("new") },
-                session = session,
-                onBiometric = { vm.unlockWithBiometric(); navController.navigate("main") }
+                session       = session,
+                onBiometric   = {
+                    vm.unlockWithBiometric()
+                    navController.navigate("main") {
+                        popUpTo("welcome") { inclusive = true }
+                    }
+                }
             )
         }
-        composable("login") { LoginScreen(vm = vm, onSuccess = { navController.navigate("main") }) }
-        composable("new") { NewEmployeeScreen() }
-        composable("main") { MainShell(vm, messengerViewModel, attendanceViewModel) }
+
+        composable("login") {
+            LoginScreen(
+                vm        = vm,
+                onSuccess = {
+                    navController.navigate("main") {
+                        popUpTo("welcome") { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable("new") {
+            NewEmployeeScreen()
+        }
+
+        composable("main") {
+            MainShell(vm, messengerViewModel, attendanceViewModel)
+        }
     }
 }

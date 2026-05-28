@@ -15,9 +15,14 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -40,10 +45,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.artleader.mvp.ui.screens.main.ai.AiScreen
 import com.artleader.mvp.ui.screens.main.messenger.MessengerScreen
 import com.artleader.mvp.ui.screens.main.profile.ProfileScreen
@@ -55,61 +63,150 @@ import com.artleader.mvp.viewmodel.MessengerViewModel
 private data class NavTab(val icon: ImageVector, val label: String)
 
 @Composable
-fun MainShell(vm: MainViewModel, messengerViewModel: MessengerViewModel, attendanceViewModel: AttendanceViewModel) {
-    var idx by remember { mutableIntStateOf(2) }
+fun MainShell(
+    vm: MainViewModel,
+    messengerViewModel: MessengerViewModel,
+    attendanceViewModel: AttendanceViewModel
+) {
+    var idx by remember { mutableIntStateOf(0) }
+
     val tabs = remember {
         listOf(
-            NavTab(Icons.Default.Person, "Profile"),
-            NavTab(Icons.Default.Chat, "Messenger"),
-            NavTab(Icons.Default.AutoAwesome, "AI"),
-            NavTab(Icons.Default.Construction, "Tools"),
-            NavTab(Icons.Default.Code, "Dev")
+            NavTab(Icons.Default.Person,       "Профиль"),
+            NavTab(Icons.Default.Chat,         "Чаты"),
+            NavTab(Icons.Default.AutoAwesome,  "AI"),
+            NavTab(Icons.Default.Construction, "Инструменты"),
+            NavTab(Icons.Default.Code,         "Dev")
         )
     }
 
     Box(Modifier.fillMaxSize().background(Color(0xFF07080F))) {
-        Box(Modifier.fillMaxSize().padding(bottom = 96.dp)) {
-            AnimatedContent(targetState = idx, transitionSpec = {
-                (fadeIn(tween(220, easing = FastOutSlowInEasing)) + scaleIn(tween(220), initialScale = 0.985f))
-                    .togetherWith(fadeOut(tween(120)) + scaleOut(tween(120), targetScale = 0.985f))
-            }, label = "main-tabs") { selected ->
-                when (selected) {
-                    0 -> ProfileScreen(vm, Modifier.fillMaxSize())
-                    1 -> MessengerScreen(messengerViewModel, Modifier.fillMaxSize())
-                    2 -> AiScreen(vm, Modifier.fillMaxSize())
-                    3 -> ToolsScreen(attendanceViewModel, Modifier.fillMaxSize())
-                    else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Dev module placeholder", color = Color(0xFF8EA2C8)) }
+
+        // ── Content area ─────────────────────────────────────────────────────
+        // Bottom padding accounts for nav bar height (80dp) + system nav bars
+        Box(Modifier.fillMaxSize().padding(bottom = 80.dp)) {
+            AnimatedContent(
+                targetState  = idx,
+                transitionSpec = {
+                    (fadeIn(tween(200, easing = FastOutSlowInEasing)) +
+                            scaleIn(tween(200), initialScale = 0.97f))
+                        .togetherWith(fadeOut(tween(100)) + scaleOut(tween(100), targetScale = 0.97f))
+                },
+                label = "main-tabs"
+            ) { tab ->
+                when (tab) {
+                    0    -> ProfileScreen(vm,                Modifier.fillMaxSize())
+                    1    -> MessengerScreen(messengerViewModel, Modifier.fillMaxSize())
+                    2    -> AiScreen(vm,                     Modifier.fillMaxSize())
+                    3    -> ToolsScreen(attendanceViewModel, Modifier.fillMaxSize())
+                    else -> DevPlaceholder()
                 }
             }
         }
-        BottomNavGlass(tabs = tabs, selected = idx, onSelected = { idx = it })
+
+        // ── Floating bottom nav ───────────────────────────────────────────────
+        PremiumBottomNav(
+            modifier  = Modifier.align(Alignment.BottomCenter),
+            tabs      = tabs,
+            selected  = idx,
+            onSelect  = { idx = it }
+        )
     }
 }
 
 @Composable
-private fun BottomNavGlass(tabs: List<NavTab>, selected: Int, onSelected: (Int) -> Unit) {
-    val aura by rememberInfiniteTransition(label = "ai-aura").animateFloat(0.2f, 0.6f, infiniteRepeatable(tween(2200), RepeatMode.Reverse), label = "aa")
-    Box(Modifier.navigationBarsPadding().padding(16.dp).fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-        Box(Modifier.padding(bottom = 2.dp)) {
-            Box(Modifier.clip(RoundedCornerShape(32.dp)).background(Color(0xCC0C0E1C)).padding(horizontal = 8.dp, vertical = 6.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    tabs.forEachIndexed { i, tab ->
-                        if (i == 2) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 2.dp)) {
-                                Box(Modifier.size(66.dp).blur(18.dp).background(Color(0xFF4EF7FF).copy(aura), CircleShape))
-                                IconButton(onClick = { onSelected(i) }, modifier = Modifier.size(56.dp).clip(CircleShape)
-                                    .background(Brush.linearGradient(listOf(Color(0xFF5F42FF), Color(0xFF2C9BFF))))) {
-                                    Icon(tab.icon, tab.label, tint = Color.White)
-                                }
+private fun PremiumBottomNav(
+    modifier: Modifier,
+    tabs: List<NavTab>,
+    selected: Int,
+    onSelect: (Int) -> Unit
+) {
+    val aiAura by rememberInfiniteTransition(label = "ai-aura").animateFloat(
+        0.25f, 0.70f,
+        infiniteRepeatable(tween(2000, easing = FastOutSlowInEasing), RepeatMode.Reverse), "aa"
+    )
+
+    Box(
+        modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        // Glass pill background
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .shadow(24.dp, RoundedCornerShape(32.dp), clip = false)
+                .clip(RoundedCornerShape(32.dp))
+                .background(Color(0xEE0C0E1C))
+                .padding(horizontal = 4.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment     = Alignment.CenterVertically
+        ) {
+            tabs.forEachIndexed { i, tab ->
+                if (i == 2) {
+                    // ── Floating AI button ──────────────────────────────────
+                    Box(
+                        Modifier.offset(y = (-14).dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Aura glow
+                        Box(
+                            Modifier.size(64.dp).blur(16.dp)
+                                .background(Color(0xFF4EF7FF).copy(aiAura), CircleShape)
+                        )
+                        // Button
+                        Box(
+                            Modifier
+                                .size(56.dp)
+                                .shadow(12.dp, CircleShape)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.linearGradient(listOf(Color(0xFF5F42FF), Color(0xFF2C9BFF)))
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            IconButton(onClick = { onSelect(i) }, modifier = Modifier.fillMaxSize()) {
+                                Icon(tab.icon, tab.label, tint = Color.White, modifier = Modifier.size(24.dp))
                             }
-                        } else {
-                            IconButton(onClick = { onSelected(i) }) {
-                                Icon(tab.icon, tab.label, tint = if (selected == i) Color(0xFF4EF7FF) else Color.White.copy(0.5f))
-                            }
+                        }
+                    }
+                } else {
+                    // ── Regular tab ────────────────────────────────────────
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (selected == i) Color.White.copy(0.06f) else Color.Transparent)
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        IconButton(onClick = { onSelect(i) }, modifier = Modifier.size(28.dp)) {
+                            Icon(
+                                tab.icon, tab.label,
+                                tint     = if (selected == i) Color(0xFF4EF7FF) else Color.White.copy(0.40f),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        if (selected == i) {
+                            Spacer(Modifier.height(2.dp))
+                            Box(Modifier.size(4.dp).clip(CircleShape).background(Color(0xFF4EF7FF)))
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DevPlaceholder() {
+    Box(Modifier.fillMaxSize().background(Color(0xFF07080F)), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("⚙", fontSize = 40.sp)
+            Spacer(Modifier.height(8.dp))
+            Text("Dev module", color = Color(0xFF3A4A6A), fontWeight = FontWeight.Bold)
+            Text("Coming soon", color = Color(0xFF2A3050), fontSize = 12.sp)
         }
     }
 }
