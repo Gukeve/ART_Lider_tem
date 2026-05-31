@@ -258,7 +258,12 @@ private fun NearbyBubble(peer: NearbyPeer, onClick: () -> Unit) {
                     .background(Brush.linearGradient(AvatarPalette[idx])),
                 contentAlignment = Alignment.Center
             ) {
-                Text(peer.initial, color = Color.White, fontWeight = FontWeight.Black, fontSize = 20.sp)
+                Text(
+                    peer.displayName.firstOrNull()?.toString() ?: "?",
+                    color = Color.White,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 20.sp
+                )
             }
             if (peer.isOnline) {
                 Box(Modifier.size(14.dp).align(Alignment.BottomEnd).clip(CircleShape).background(Bg).padding(2.dp)) {

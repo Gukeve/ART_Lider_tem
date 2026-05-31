@@ -77,6 +77,7 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import kotlin.math.cos
 import kotlin.math.sin
+import androidx.compose.foundation.layout.BoxScope
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 private val BgTop = Color(0xFF0A0414)
@@ -301,7 +302,7 @@ fun ProfileScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
 
 // ── Floating question tags ────────────────────────────────────────────────────
 @Composable
-private fun FloatingQuestions() {
+private fun BoxScope.FloatingQuestions() {
     FLOATING_QUESTIONS.forEachIndexed { i, text ->
         val speed = 2800 + i * 400
         val offset = i * (360f / FLOATING_QUESTIONS.size)
